@@ -1,4 +1,4 @@
-"""Job Posting Database ORM Model (Kalana)."""
+"""Job Posting Database ORM Model."""
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
@@ -18,5 +18,6 @@ class Job(Base):
     location = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    # Relationships
     recruiter = relationship("User", back_populates="jobs")
     match_results = relationship("MatchResult", back_populates="job", cascade="all, delete-orphan")
