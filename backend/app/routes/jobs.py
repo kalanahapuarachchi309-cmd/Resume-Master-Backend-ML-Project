@@ -17,5 +17,24 @@ def create_job(
     current_user: User = Depends(require_role(["RECRUITER", "ADMIN"])),
     db: Session = Depends(get_db),
 ):
-    """Create a new job posting (Recruiter or Admin only)."""
     return JobService.create_job(db=db, job_in=job_in, recruiter_id=current_user.id)
+
+
+@router.get("/", response_model=List[JobResponse])
+def list_jobs(
+    skip: int = 0,
+    limit: int = 50,
+    search: Optional[str] = Query(None, description="Search keyword in title, description, or location"),
+    db: Session = Depends(get_db),
+):
+    """List available jobs with optional keyword filtering and pagination."""
+    return JobService.list_jobs(db=db, skip=skip, limit=limit, search=search)
+
+
+@router.get("/{job_id}", response_model=JobResponse)
+def get_job(job_id: int, db: Session = Depends(get_db)):
+    """Retrieve detailed specifications for a specific job."""
+    job = JobService.get_job(db=db, job_id=job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    return job
