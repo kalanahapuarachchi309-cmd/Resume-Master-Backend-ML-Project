@@ -4,9 +4,14 @@ import hmac
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Any
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
+from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.database.connection import get_db
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
 try:
     from passlib.context import CryptContext
@@ -53,7 +58,6 @@ def create_access_token(subject: Any, role: str, expires_delta: Optional[timedel
 
 
 def decode_access_token(token: str) -> dict:
-    """Validate signature and decode JWT payload."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
@@ -63,3 +67,18 @@ def decode_access_token(token: str) -> dict:
             detail="Could not validate credentials or token expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """FastAPI dependency: Extract and verify current active user from DB."""
+    from app.models.user import User
+
+    payload = decode_access_token(token)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account no longer exists")
+    return user
