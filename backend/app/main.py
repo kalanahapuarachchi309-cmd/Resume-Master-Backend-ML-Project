@@ -1,13 +1,24 @@
-"""FastAPI Application Entrypoint."""
+"""FastAPI Application Entrypoint (Kalana)."""
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.database.connection import init_db
 from app.routes.auth import router as auth_router
 from app.routes.users import router as users_router
 from app.routes.jobs import router as jobs_router
 from app.routes.resumes import router as resumes_router
 from app.routes.matching import router as matching_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan context manager for startup and shutdown hooks."""
+    # Initialize database tables on startup
+    init_db()
+    yield
+
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -17,6 +28,7 @@ app = FastAPI(
     redoc_url="/redoc",
     description="AI-Powered Resume Screening & Job Matching REST API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS Configuration
@@ -28,7 +40,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API Routers under standard prefix
+# Include API Routers under standard /api prefix
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(jobs_router, prefix=settings.API_V1_STR)
