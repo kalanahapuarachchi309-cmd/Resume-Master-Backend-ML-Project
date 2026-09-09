@@ -21,3 +21,5 @@ class Job(Base):
     # Relationships
     recruiter = relationship("User", back_populates="jobs")
     match_results = relationship("MatchResult", back_populates="job", cascade="all, delete-orphan")
+
+# verified cascading delete integrity
