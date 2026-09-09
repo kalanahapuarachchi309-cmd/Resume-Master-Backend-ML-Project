@@ -11,6 +11,18 @@ class JobService:
         return db.query(Job).filter(Job.id == job_id).first()
 
     @staticmethod
+    def list_jobs(db: Session, skip: int = 0, limit: int = 50, search: Optional[str] = None) -> List[Job]:
+        query = db.query(Job)
+        if search and search.strip():
+            keyword = f"%{search.strip()}%"
+            query = query.filter(
+                (Job.title.ilike(keyword)) | 
+                (Job.description.ilike(keyword)) |
+                (Job.location.ilike(keyword))
+            )
+        return query.order_by(Job.created_at.desc()).offset(skip).limit(limit).all()
+
+    @staticmethod
     def create_job(db: Session, job_in: JobCreate, recruiter_id: int) -> Job:
         job = Job(
             recruiter_id=recruiter_id,
