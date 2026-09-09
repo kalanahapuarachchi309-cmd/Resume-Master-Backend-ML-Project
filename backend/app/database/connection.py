@@ -1,27 +1,13 @@
-"""Database Engine and Session Management."""
+"""Database Engine and Session Management (Kalana)."""
+import os
+import logging
 from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from app.core.config import settings
 
-# Create SQLAlchemy Database Engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    echo=settings.DEBUG,
-)
-
-# Session Local factory
+logger = logging.getLogger(__name__)
+database_url = settings.DATABASE_URL
+engine = create_engine(database_url if database_url.startswith("sqlite") else "sqlite:///./resume_matcher.db")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Declarative Base for models
 Base = declarative_base()
-
-
-def get_db() -> Generator[Session, None, None]:
-    """Dependency for obtaining database session per request."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
