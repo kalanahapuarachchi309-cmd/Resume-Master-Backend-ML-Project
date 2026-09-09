@@ -2,6 +2,10 @@
 import os
 import hmac
 import hashlib
+from datetime import datetime, timedelta
+from typing import Optional, Any
+from jose import jwt
+from app.core.config import settings
 
 try:
     from passlib.context import CryptContext
@@ -12,7 +16,6 @@ except Exception:
 
 
 def get_password_hash(password: str) -> str:
-    """Generate secure salted password hash with pbkdf2 fallback."""
     if _has_passlib:
         try:
             return pwd_context.hash(password)
@@ -24,7 +27,6 @@ def get_password_hash(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify raw password against stored hash."""
     if hashed_password.startswith("pbkdf2:"):
         parts = hashed_password.split(":")
         if len(parts) == 3:
@@ -38,3 +40,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         except Exception:
             pass
     return False
+
+
+def create_access_token(subject: Any, role: str, expires_delta: Optional[timedelta] = None) -> str:
+    """Generate encoded JWT with subject, role, and expiration timestamp."""
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode = {"exp": expire, "sub": str(subject), "role": str(role)}
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
