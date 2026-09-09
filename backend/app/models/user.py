@@ -1,4 +1,4 @@
-"""User Database ORM Model (Kalana)."""
+"""User Database ORM Model."""
 import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Enum
@@ -7,7 +7,7 @@ from app.database.connection import Base
 
 
 class UserRole(str, enum.Enum):
-    """User access control roles for system actors."""
+    """User access control roles."""
     ADMIN = "ADMIN"
     RECRUITER = "RECRUITER"
     CANDIDATE = "CANDIDATE"
@@ -24,5 +24,6 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.CANDIDATE, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    # Relationships
     jobs = relationship("Job", back_populates="recruiter", cascade="all, delete-orphan")
     resumes = relationship("Resume", back_populates="candidate", cascade="all, delete-orphan")
