@@ -21,3 +21,12 @@ else:
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Dependency for obtaining a scoped database session per request."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
