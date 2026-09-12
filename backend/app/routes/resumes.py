@@ -114,12 +114,13 @@ async def upload_resume(
 
 
 @router.post("/upload-batch", response_model=List[ResumeUploadResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/upload-bulk", response_model=List[ResumeUploadResponse], status_code=status.HTTP_201_CREATED)
 async def upload_batch_resumes(
     files: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload and parse a batch of candidate resumes simultaneously."""
+    """Upload and parse a batch/bulk of candidate resumes simultaneously."""
     if not files or len(files) == 0:
         raise HTTPException(status_code=400, detail="No files were provided for upload.")
 
@@ -129,9 +130,16 @@ async def upload_batch_resumes(
             content = await upload.read()
             parsed_data = _save_and_parse_file(content, upload.filename)
 
+            # Generate clean candidate name from filename
+            base_name = upload.filename.rsplit(".", 1)[0]
+            clean_name = re.sub(r"(?i)(_resume|_cv|resume|cv)", "", base_name).strip(" _-")
+            candidate_display_name = clean_name.replace("_", " ").replace("-", " ").title()
+            if not candidate_display_name:
+                candidate_display_name = base_name.replace("_", " ").title()
+
             resume = Resume(
                 candidate_id=current_user.id,
-                candidate_name=f"Candidate: {upload.filename.split('.')[0].replace('_', ' ').title()}",
+                candidate_name=candidate_display_name,
                 filename=parsed_data["filename"],
                 file_path=parsed_data["file_path"],
                 raw_text=parsed_data["raw_text"],
@@ -151,7 +159,7 @@ async def upload_batch_resumes(
                 experience_years=resume.experience_years,
                 education_level=resume.education_level,
                 uploaded_at=resume.uploaded_at,
-                message="Successfully parsed",
+                message="Successfully parsed and indexed.",
             ))
         except Exception as e:
             # Continue with other files if one file fails
