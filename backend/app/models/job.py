@@ -15,6 +15,7 @@ class Job(Base):
     description = Column(Text, nullable=False)
     required_skills = Column(JSON, nullable=False, default=list)  # List of skill strings
     experience_required = Column(Float, default=0.0, nullable=False)  # in years
+    education_level = Column(String(100), nullable=True, default="Bachelor's Degree")
     location = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

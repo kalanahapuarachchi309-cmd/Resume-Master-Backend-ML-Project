@@ -38,10 +38,24 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db():
-    """Initializes all database tables and seeds default users on application startup."""
+    """Initializes all database tables, performs auto-migrations, and seeds default users."""
     import app.models  # Ensure all ORM models are registered with Base metadata
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized successfully.")
+
+    # Auto-migration: ensure education_level column exists on jobs table
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        if "jobs" in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns("jobs")]
+            if "education_level" not in columns:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE jobs ADD COLUMN education_level VARCHAR(100) DEFAULT 'Bachelor''s Degree'"))
+                logger.info("Auto-migrated 'jobs' table: added 'education_level' column.")
+    except Exception as e:
+        logger.warning(f"Schema auto-migration notice: {e}")
+
     try:
         from app.database.seed import seed_default_users
         seed_default_users()
