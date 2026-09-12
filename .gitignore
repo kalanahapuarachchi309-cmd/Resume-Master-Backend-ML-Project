@@ -44,3 +44,7 @@ htmlcov/
 
 # Frontend Sub-project (Separate Git Repository)
 frontend/
+
+# Local Database Files
+*.db
+*.sqlite3
