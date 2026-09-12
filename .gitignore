@@ -23,6 +23,7 @@ ENV/
 *.h5
 *.pt
 *.onnx
+!backend/app/ml/*.pkl
 
 # Uploads & Temporary Parsing Cache
 uploads/
