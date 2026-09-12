@@ -67,8 +67,27 @@ def _save_and_parse_file(file_bytes: bytes, original_filename: str) -> dict:
     experience_years = SkillExtractor.extract_experience_years(raw_text)
     education_level = SkillExtractor.extract_education(raw_text)
 
+    # Intelligent candidate name extraction
+    candidate_name = None
+    lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
+    for line in lines[:8]:
+        if '@' in line or 'http' in line or re.search(r'\d{4,}', line):
+            continue
+        lower_line = line.lower()
+        if any(h in lower_line for h in ['resume', 'curriculum', 'vitae', 'project', 'education', 'experience', 'summary', 'profile', 'about', 'skills']):
+            continue
+        words = line.split()
+        if 2 <= len(words) <= 4 and all(re.match(r'^[A-Za-z\.\-\'\s]+$', w) for w in words):
+            candidate_name = line.title()
+            break
+    if not candidate_name:
+        base = original_filename.rsplit('.', 1)[0]
+        clean = re.sub(r'(?i)(_resume|_cv|resume|cv)', '', base).strip(' _-')
+        candidate_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', clean).replace('_', ' ').replace('-', ' ').title()
+
     return {
         "filename": original_filename,
+        "candidate_name": candidate_name,
         "file_path": disk_path,
         "raw_text": raw_text,
         "parsed_skills": parsed_skills,
@@ -87,9 +106,12 @@ async def upload_resume(
     content = await file.read()
     parsed_data = _save_and_parse_file(content, file.filename)
 
+    user_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    name = current_user.name if user_role == "CANDIDATE" else (parsed_data["candidate_name"] or current_user.name)
+
     resume = Resume(
         candidate_id=current_user.id,
-        candidate_name=current_user.name,
+        candidate_name=name,
         filename=parsed_data["filename"],
         file_path=parsed_data["file_path"],
         raw_text=parsed_data["raw_text"],
@@ -130,12 +152,14 @@ async def upload_batch_resumes(
             content = await upload.read()
             parsed_data = _save_and_parse_file(content, upload.filename)
 
-            # Generate clean candidate name from filename
-            base_name = upload.filename.rsplit(".", 1)[0]
-            clean_name = re.sub(r"(?i)(_resume|_cv|resume|cv)", "", base_name).strip(" _-")
-            candidate_display_name = clean_name.replace("_", " ").replace("-", " ").title()
+            # Generate clean candidate name
+            candidate_display_name = parsed_data.get("candidate_name")
             if not candidate_display_name:
-                candidate_display_name = base_name.replace("_", " ").title()
+                base_name = upload.filename.rsplit(".", 1)[0]
+                clean_name = re.sub(r"(?i)(_resume|_cv|resume|cv)", "", base_name).strip(" _-")
+                candidate_display_name = clean_name.replace("_", " ").replace("-", " ").title()
+            if not candidate_display_name:
+                candidate_display_name = upload.filename.rsplit(".", 1)[0].replace("_", " ").title()
 
             resume = Resume(
                 candidate_id=current_user.id,
