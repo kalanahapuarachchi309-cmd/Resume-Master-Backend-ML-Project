@@ -37,9 +37,52 @@ class CloudinaryService:
                 logger.info(f"Cloudinary successfully configured for cloud: {settings.CLOUDINARY_CLOUD_NAME}")
 
     @classmethod
+    def check_status(cls) -> dict:
+        """Run diagnostics on Cloudinary SDK, configuration, and connectivity."""
+        if not _has_cloudinary:
+            return {
+                "ok": False,
+                "installed": False,
+                "error": "The 'cloudinary' Python package is not installed in this environment. Run: pip install cloudinary>=1.40.0"
+            }
+
+        if not (settings.CLOUDINARY_CLOUD_NAME and settings.CLOUDINARY_API_KEY and settings.CLOUDINARY_API_SECRET):
+            return {
+                "ok": False,
+                "installed": True,
+                "configured": False,
+                "error": "Cloudinary credentials missing in settings/env (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)."
+            }
+
+        cls._init_cloudinary()
+
+        try:
+            ping_res = cloudinary.api.ping()
+            return {
+                "ok": True,
+                "installed": True,
+                "configured": True,
+                "cloud_name": settings.CLOUDINARY_CLOUD_NAME,
+                "folder": settings.CLOUDINARY_FOLDER,
+                "ping": ping_res,
+                "message": "Cloudinary is fully connected and ready for uploads."
+            }
+        except Exception as e:
+            return {
+                "ok": False,
+                "installed": True,
+                "configured": True,
+                "cloud_name": settings.CLOUDINARY_CLOUD_NAME,
+                "error": f"Failed to connect to Cloudinary API: {str(e)}"
+            }
+
+    @classmethod
     def upload_resume(cls, file_bytes: bytes, filename: str) -> Optional[str]:
         """Upload resume bytes to Cloudinary raw storage and return secure HTTPS URL."""
-        if not _has_cloudinary or not file_bytes:
+        if not _has_cloudinary:
+            print("[Cloudinary Error] 'cloudinary' package is not installed! Run: pip install cloudinary")
+            return None
+        if not file_bytes:
             return None
 
         cls._init_cloudinary()

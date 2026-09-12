@@ -50,6 +50,8 @@ def _save_and_parse_file(file_bytes: bytes, original_filename: str) -> dict:
 
     # Upload to Cloudinary CDN (Mahen & Team)
     cloudinary_url = CloudinaryService.upload_resume(file_bytes, original_filename)
+    if not cloudinary_url:
+        print(f"[Cloudinary Warning] Document '{original_filename}' was not uploaded to Cloudinary (check 'pip install cloudinary' and internet). Saved to local backup disk: {disk_path}")
 
     # Extract text according to format
     if ext == ".pdf":
@@ -254,6 +256,12 @@ def get_resume(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to candidate record")
 
     return resume
+
+
+@router.get("/cloudinary-status")
+def get_cloudinary_status():
+    """Diagnostic endpoint to verify Cloudinary installation, configuration, and connectivity."""
+    return CloudinaryService.check_status()
 
 
 @router.post("/sync-cloudinary")
