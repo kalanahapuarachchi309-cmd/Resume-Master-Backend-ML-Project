@@ -140,14 +140,30 @@ class SkillExtractor:
         return sorted(list(found_skills))
 
     @staticmethod
+    def extract_email(text: str) -> Optional[str]:
+        """Extract primary candidate email address from resume text."""
+        if not text:
+            return None
+        match = re.search(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", text)
+        return match.group(0).lower() if match else None
+
+    @staticmethod
+    def extract_phone(text: str) -> Optional[str]:
+        """Extract phone number if present."""
+        if not text:
+            return None
+        match = re.search(r"(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}", text)
+        return match.group(0).strip() if match else None
+
+    @staticmethod
     def extract_experience_years(text: str) -> float:
-        """Parse resume for professional work experience using regex & date spans."""
+        """Parse resume for professional work experience using regex, section filtering & merged intervals."""
         if not text:
             return 0.0
 
         # Pattern 1: Explicit statements ("5+ years of experience", "worked for 4 years")
         explicit_patterns = [
-            r"(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s+of)?\s+(?:professional\s+)?experience",
+            r"(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s+of)?\s+(?:professional|industry|hands-on|relevant)?\s*experience",
             r"experience\s*:\s*(\d+(?:\.\d+)?)\s*(?:years?|yrs?)",
             r"worked\s+(?:for\s+)?(\d+(?:\.\d+)?)\s*(?:years?|yrs?)",
             r"over\s+(\d+(?:\.\d+)?)\s*(?:years?|yrs?)(?:\s+of)?\s+experience",
@@ -158,30 +174,68 @@ class SkillExtractor:
             if match:
                 try:
                     exp = float(match.group(1))
-                    if 0.5 <= exp <= 35.0:
-                        return exp
+                    if 0.5 <= exp <= 30.0:
+                        return round(exp, 1)
                 except ValueError:
                     pass
 
-        # Pattern 2: Year date ranges (e.g., 2019 - 2024, 2021 - Present)
+        # Pattern 2: Extract date ranges with interval merging
         current_year = datetime.now().year
-        year_matches = re.findall(r"\b(20\d\d|19\d\d)\s*(?:-|–|to)\s*(20\d\d|present|current)\b", text, re.IGNORECASE)
-        total_range_years = 0.0
+        
+        # Split text into lines to exclude education sections from date calculation
+        lines = text.split('\n')
+        in_education_section = False
+        work_lines = []
+        for line in lines:
+            line_clean = line.strip().lower()
+            if any(h in line_clean for h in ["education", "academic", "degrees", "qualifications", "certifications"]):
+                in_education_section = True
+            elif any(h in line_clean for h in ["work experience", "experience", "employment", "professional experience", "career", "projects"]):
+                in_education_section = False
+            
+            if not in_education_section:
+                work_lines.append(line)
+        
+        target_text = "\n".join(work_lines) if work_lines else text
 
+        # Find month/year or year-only date spans
+        # Matches: 2018 - 2022, 01/2019 - Present, Jan 2020 to May 2023
+        year_matches = re.findall(
+            r"\b(20\d\d|19\d\d)\s*(?:-|–|to)\s*(20\d\d|present|current)\b",
+            target_text,
+            re.IGNORECASE
+        )
+
+        intervals = []
         for start_str, end_str in year_matches:
             try:
                 start_y = int(start_str)
                 end_y = current_year if end_str.lower() in ["present", "current"] else int(end_str)
-                diff = max(0, end_y - start_y)
-                if diff <= 25:
-                    total_range_years += diff
+                if 1980 <= start_y <= current_year and start_y <= end_y:
+                    # Single year jobs count as at least 0.5 - 1.0 years
+                    effective_end = max(end_y, start_y + 1)
+                    # Limit ongoing single job duration to max 8 years if entry level / intern mentioned
+                    if end_str.lower() in ["present", "current"] and any(w in target_text.lower() for w in ["entry level", "junior", "intern"]):
+                        effective_end = min(effective_end, start_y + 3)
+                    intervals.append((start_y, effective_end))
             except ValueError:
                 pass
 
-        if total_range_years > 0.0:
-            return min(30.0, total_range_years)
+        if not intervals:
+            # Check if any single recent graduation year exists
+            return 0.0
 
-        return 0.0
+        # Merge overlapping intervals to avoid double-counting parallel roles
+        intervals.sort(key=lambda x: x[0])
+        merged = []
+        for start, end in intervals:
+            if not merged or start > merged[-1][1]:
+                merged.append([start, end])
+            else:
+                merged[-1][1] = max(merged[-1][1], end)
+
+        total_years = sum(end - start for start, end in merged)
+        return float(min(30.0, max(0.0, total_years)))
 
     @staticmethod
     def extract_education(text: str) -> str:
@@ -190,13 +244,20 @@ class SkillExtractor:
             return "None"
 
         text_lower = text.lower()
-        if re.search(r"\b(ph\.?d|doctor of philosophy|doctorate)\b", text_lower):
+        # Doctorate
+        if re.search(r"(ph\.?d|doctor\s*of|doctorate)", text_lower):
             return "PhD"
-        if re.search(r"\b(master|msc|m\.sc|m\.tech|mba|meng)\b", text_lower):
+        # Master
+        if re.search(r"(master|msc|m\.sc|m\.tech|mba|meng|postgraduate)", text_lower):
             return "MSc"
-        if re.search(r"\b(bachelor|bsc|b\.sc|b\.e|b\.tech|beng|bba|undergraduate)\b", text_lower):
+        # Bachelor
+        if re.search(r"(bachelor|bsc|b\.sc|b\.e|b\.tech|beng|bba|undergraduate|degree)", text_lower):
             return "Bachelor"
-        if re.search(r"\b(diploma|associate|higher diploma)\b", text_lower):
+        # Diploma / Associate
+        if re.search(r"(diploma|associate|higher\s*diploma)", text_lower):
             return "Diploma"
+        # High School
+        if re.search(r"(high\s*school|secondary)", text_lower):
+            return "High School"
 
         return "None"

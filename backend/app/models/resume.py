@@ -12,6 +12,7 @@ class Resume(Base):
     id = Column(Integer, primary_key=True, index=True)
     candidate_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     candidate_name = Column(String(255), nullable=True)
+    candidate_email = Column(String(255), nullable=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(512), nullable=False)
     raw_text = Column(Text, nullable=True)

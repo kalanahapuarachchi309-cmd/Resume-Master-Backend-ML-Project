@@ -20,8 +20,11 @@ class CandidateMatchDetail(BaseModel):
     rank: int
     matched_skills: List[str] = Field(default_factory=list)
     missing_skills: List[str] = Field(default_factory=list)
+    candidate_skills: List[str] = Field(default_factory=list)
     experience_years: float = 0.0
     experience_fit: str = "N/A"
+    education_level: Optional[str] = None
+    education_fit: Optional[str] = None
     match_summary: Optional[str] = None
     model_used: Optional[str] = "RandomForestClassifier (Supervised ML)"
     feature_contributions: Optional[dict] = None

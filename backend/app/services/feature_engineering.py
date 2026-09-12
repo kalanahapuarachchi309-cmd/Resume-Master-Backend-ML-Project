@@ -18,7 +18,22 @@ from typing import List, Dict, Any, Tuple, Optional
 from sklearn.metrics.pairwise import cosine_similarity
 from app.services.nlp.cleaner import TextCleaner
 
-DEGREE_ORDER = {"None": 0, "Diploma": 1, "Bachelor": 2, "MSc": 3, "PhD": 4}
+def normalize_degree(degree_str: Optional[str]) -> Tuple[str, int]:
+    """Returns (canonical_display_name, ordinal_tier 0-4)."""
+    if not degree_str:
+        return "None", 0
+    d = str(degree_str).lower().strip()
+    if any(k in d for k in ["phd", "doctor"]):
+        return "PhD", 4
+    if any(k in d for k in ["master", "msc", "mba", "m.tech", "postgraduate"]):
+        return "Master's Degree", 3
+    if any(k in d for k in ["bachelor", "bsc", "b.tech", "undergraduate", "b.e", "bba", "degree"]):
+        return "Bachelor's Degree", 2
+    if any(k in d for k in ["diploma", "associate", "higher diploma"]):
+        return "Associate / Diploma", 1
+    if any(k in d for k in ["high school", "secondary"]):
+        return "High School", 0
+    return "Not Specified", 0
 
 
 class FeatureEngineeringPipeline:
@@ -49,15 +64,17 @@ class FeatureEngineeringPipeline:
         candidate_exp: Optional[float] = None,
         required_exp: Optional[float] = 0.0,
         candidate_edu: Optional[str] = "None",
+        required_edu: Optional[str] = "Bachelor",
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Transforms a candidate resume & job description into a model-ready 1x7 feature vector
-
         and returns explainable insights.
         """
         # --- Technique 8: Missing Value Imputation ---
         clean_cand_exp = 0.0 if (candidate_exp is None or np.isnan(candidate_exp)) else float(candidate_exp)
         clean_req_exp = 0.0 if (required_exp is None or np.isnan(required_exp)) else float(required_exp)
-        clean_edu = candidate_edu if candidate_edu else "None"
+        
+        cand_edu_name, cand_edu_tier = normalize_degree(candidate_edu)
+        req_edu_name, req_edu_tier = normalize_degree(required_edu)
 
         # --- Technique 1: TF-IDF Text Similarity with pre-fitted vectorizer ---
         vectorizer = cls.get_vectorizer()
@@ -96,7 +113,7 @@ class FeatureEngineeringPipeline:
         exp_fit_binary = 1.0 if clean_cand_exp >= clean_req_exp else 0.0
 
         # --- Technique 7: Education Degree Ordinal Encoding ---
-        edu_ordinal = float(DEGREE_ORDER.get(clean_edu, 0))
+        edu_ordinal = float(cand_edu_tier)
 
         # 1x7 Feature vector identical to model training matrix:
         feature_vector = np.array([[
@@ -109,7 +126,7 @@ class FeatureEngineeringPipeline:
             edu_ordinal,
         ]], dtype=np.float32)
 
-        # Human-readable explainability description
+        # Human-readable experience explainability description
         if clean_cand_exp >= clean_req_exp + 1.0:
             exp_summary = f"Exceeds Requirement (+{round(clean_cand_exp - clean_req_exp, 1)} yrs)"
         elif clean_cand_exp >= clean_req_exp:
@@ -118,6 +135,16 @@ class FeatureEngineeringPipeline:
             gap = round(clean_req_exp - clean_cand_exp, 1)
             exp_summary = f"Under Requirement (-{gap} yrs)"
 
+        # Education fit assessment
+        if cand_edu_tier > req_edu_tier:
+            edu_fit_summary = f"Exceeds Requirement ({cand_edu_name})"
+        elif cand_edu_tier == req_edu_tier and cand_edu_tier > 0:
+            edu_fit_summary = f"Meets Requirement ({cand_edu_name})"
+        elif cand_edu_tier < req_edu_tier and cand_edu_tier > 0:
+            edu_fit_summary = f"Under Requirement ({cand_edu_name} vs {req_edu_name})"
+        else:
+            edu_fit_summary = f"Requires {req_edu_name}"
+
         explainability = {
             "tfidf_similarity": round(tfidf_sim * 100.0, 1),
             "skill_match_percentage": round(skill_overlap_ratio * 100.0, 1),
@@ -125,7 +152,8 @@ class FeatureEngineeringPipeline:
             "missing_skills": missing_skills,
             "experience_fit": exp_summary,
             "experience_years": clean_cand_exp,
-            "education_level": clean_edu,
+            "education_level": cand_edu_name,
+            "education_fit": edu_fit_summary,
         }
 
         return feature_vector, explainability

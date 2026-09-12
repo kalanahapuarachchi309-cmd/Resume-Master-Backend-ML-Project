@@ -43,25 +43,35 @@ class ResumeMatchPredictor:
     def predict_match_probability(self, feature_vector: np.ndarray) -> float:
         """Predict candidate suitability probability using the trained ML model.
 
-        Returns match percentage between 0.0% and 100.0%.
+        Combines trained ML model probability with calibrated domain feature weighting
+        to provide smooth, accurate, explainable candidate ranking (0.0% to 100.0%).
         """
-        if self.model is not None:
-            try:
-                # Use model.predict_proba for soft probability distribution [P(0), P(1)]
-                proba = self.model.predict_proba(feature_vector)[0][1]
-                return round(float(proba * 100.0), 1)
-            except Exception as e:
-                logger.error(f"Prediction failed with trained model: {e}")
-
-        # If model is not trained yet, use weighted feature expectation
-        # feature_vector has [tfidf_sim, skill_overlap, skill_count, missing_ratio, exp_delta, exp_fit, edu_ordinal]
         try:
-            tfidf_sim = feature_vector[0][0]
-            skill_overlap = feature_vector[0][1]
-            exp_fit = feature_vector[0][5]
-            baseline_score = (skill_overlap * 0.55) + (tfidf_sim * 0.30) + (exp_fit * 0.15)
-            return round(float(np.clip(baseline_score * 100.0, 5.0, 99.0)), 1)
-        except Exception:
+            tfidf_sim = float(feature_vector[0][0])
+            skill_overlap = float(feature_vector[0][1])
+            exp_delta = float(feature_vector[0][4])
+            exp_fit = float(feature_vector[0][5])
+            edu_ordinal = float(feature_vector[0][6])
+
+            # Domain continuous feature evaluation
+            exp_score = 1.0 if exp_fit else max(0.2, 1.0 + (exp_delta / 4.0))
+            edu_score = min(1.0, max(0.4, edu_ordinal / 2.0))
+            feature_score = (skill_overlap * 0.55) + (exp_score * 0.25) + (tfidf_sim * 0.12) + (edu_score * 0.08)
+            feature_pct = feature_score * 100.0
+
+            if self.model is not None:
+                ml_proba = float(self.model.predict_proba(feature_vector)[0][1]) * 100.0
+                # 60% ML Random Forest decision probability, 40% granular domain feature calibration
+                final_score = (ml_proba * 0.60) + (feature_pct * 0.40)
+                if skill_overlap >= 0.85:
+                    final_score = max(final_score, 82.0 + (exp_fit * 12.0))
+                elif skill_overlap <= 0.20:
+                    final_score = min(final_score, 35.0)
+                return round(float(np.clip(final_score, 0.0, 100.0)), 1)
+
+            return round(float(np.clip(feature_pct, 5.0, 99.0)), 1)
+        except Exception as e:
+            logger.error(f"Prediction calculation error: {e}")
             return 50.0
 
 

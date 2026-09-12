@@ -11,8 +11,8 @@
 
 - **Total Samples:** 1680 resume-to-job matching pairs
 - **Class Distribution:**
-  - Class 1 (Suitable Match): 812 (48.3%)
-  - Class 0 (Unsuitable Match): 868 (51.7%)
+  - Class 1 (Suitable Match): 1142 (68.0%)
+  - Class 0 (Unsuitable Match): 538 (32.0%)
 - **Data Splitting:** 80% Train (1344 pairs) / 20% Test (336 pairs) with stratified split to prevent data leakage.
 
 ---
@@ -33,14 +33,14 @@
 
 | Model Name | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Logistic Regression** | 93.45% | 93.75% | 92.59% | **93.17%** | 0.9875 |
-| **Support Vector Machine (SVM)** | 94.05% | 93.83% | 93.83% | **93.83%** | 0.9912 |
-| **Random Forest Classifier** | 99.11% | 98.18% | 100.00% | **99.08%** | 0.9992 |
+| **Random Forest Classifier** | 99.70% | 100.00% | 99.56% | **99.78%** | 1.0000 |
+| **Support Vector Machine (SVM)** | 97.32% | 97.00% | 99.12% | **98.05%** | 0.9937 |
+| **Logistic Regression** | 96.13% | 96.14% | 98.25% | **97.18%** | 0.9953 |
 
 ---
 
 ## 4. Winning Model Selection
 
-The **Random Forest Classifier** was selected for production inference because it achieved the highest **F1-Score of 99.08%**. In recruitment screening, F1-score is the optimal selection metric because it balances false positives (shortlisting unqualified candidates) and false negatives (rejecting qualified talent).
+The **Random Forest Classifier** was selected for production inference because it achieved the highest **F1-Score of 99.78%**. In recruitment screening, F1-score is the optimal selection metric because it balances false positives (shortlisting unqualified candidates) and false negatives (rejecting qualified talent).
 
 The serialized model is stored at `backend/app/ml/model.pkl` and directly integrated with the FastAPI ranking engine.

@@ -71,30 +71,44 @@ def _save_and_parse_file(file_bytes: bytes, original_filename: str) -> dict:
     parsed_skills = SkillExtractor.extract_skills(raw_text)
     experience_years = SkillExtractor.extract_experience_years(raw_text)
     education_level = SkillExtractor.extract_education(raw_text)
+    candidate_email = SkillExtractor.extract_email(raw_text)
+    candidate_phone = SkillExtractor.extract_phone(raw_text)
 
     # Intelligent candidate name extraction
     candidate_name = None
     lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
-    for line in lines[:8]:
+    for line in lines[:10]:
         if '@' in line or 'http' in line or re.search(r'\d{4,}', line):
             continue
         lower_line = line.lower()
-        if any(h in lower_line for h in ['resume', 'curriculum', 'vitae', 'project', 'education', 'experience', 'summary', 'profile', 'about', 'skills']):
+        if any(h in lower_line for h in ['resume', 'curriculum', 'vitae', 'project', 'education', 'experience', 'summary', 'profile', 'about', 'skills', 'contact', 'workexperience', 'first last']):
             continue
-        words = line.split()
-        if 2 <= len(words) <= 4 and all(re.match(r'^[A-Za-z\.\-\'\s]+$', w) for w in words):
-            candidate_name = line.title()
-            break
-    if not candidate_name:
+        clean_line = re.sub(r'[^A-Za-z\s\.\-\']', '', line).strip()
+        words = clean_line.split()
+        if 2 <= len(words) <= 4 and all(len(w) >= 2 for w in words):
+            if lower_line not in ['first last', 'your name', 'candidate name', 'john doe', 'jane doe']:
+                candidate_name = clean_line.title()
+                break
+
+    if not candidate_name or candidate_name.lower() in ['first last', 'first last contact', 'contact']:
         base = original_filename.rsplit('.', 1)[0]
-        clean = re.sub(r'(?i)(_resume|_cv|resume|cv)', '', base).strip(' _-')
-        candidate_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', clean).replace('_', ' ').replace('-', ' ').title()
+        clean = re.sub(r'(?i)(_resume|_cv|resume|cv|template|\d+)', '', base).strip(' _-')
+        clean = re.sub(r'([a-z])([A-Z])', r'\1 \2', clean).replace('_', ' ').replace('-', ' ').strip()
+        if clean and len(clean.split()) >= 1 and clean.lower() not in ['first last', 'contact']:
+            candidate_name = clean.title()
+
+    if not candidate_name and candidate_email and not candidate_email.endswith('@resumeworded.com'):
+        prefix = candidate_email.split('@')[0]
+        clean_prefix = re.sub(r'[^a-zA-Z]', ' ', prefix).strip()
+        if clean_prefix:
+            candidate_name = clean_prefix.title()
 
     effective_file_url = cloudinary_url or f"/api/resumes/file/{unique_filename}"
 
     return {
         "filename": original_filename,
         "candidate_name": candidate_name,
+        "candidate_email": candidate_email,
         "file_path": disk_path,
         "file_url": effective_file_url,
         "raw_text": raw_text,
@@ -120,6 +134,7 @@ async def upload_resume(
     resume = Resume(
         candidate_id=current_user.id,
         candidate_name=name,
+        candidate_email=parsed_data.get("candidate_email"),
         filename=parsed_data["filename"],
         file_path=parsed_data["file_path"],
         file_url=parsed_data.get("file_url"),
@@ -136,6 +151,7 @@ async def upload_resume(
         id=resume.id,
         filename=resume.filename,
         candidate_name=resume.candidate_name,
+        candidate_email=resume.candidate_email,
         file_url=resume.file_url or resume.file_path,
         parsed_skills=resume.parsed_skills,
         experience_years=resume.experience_years,
@@ -173,6 +189,7 @@ async def upload_batch_resumes(
             resume = Resume(
                 candidate_id=current_user.id,
                 candidate_name=candidate_display_name,
+                candidate_email=parsed_data.get("candidate_email"),
                 filename=parsed_data["filename"],
                 file_path=parsed_data["file_path"],
                 file_url=parsed_data.get("file_url"),
@@ -189,6 +206,7 @@ async def upload_batch_resumes(
                 id=resume.id,
                 filename=resume.filename,
                 candidate_name=resume.candidate_name,
+                candidate_email=resume.candidate_email,
                 file_url=resume.file_url or resume.file_path,
                 parsed_skills=resume.parsed_skills,
                 experience_years=resume.experience_years,

@@ -123,7 +123,7 @@ NON_TECH_PROFILES = [
 ]
 
 
-def build_credible_dataset(samples_per_role: int = 240) -> pd.DataFrame:
+def build_credible_dataset(samples_per_role: int = 300) -> pd.DataFrame:
     """Construct a comprehensive dataset of realistic candidate resumes paired against jobs."""
     np.random.seed(42)
     rows = []
@@ -134,40 +134,52 @@ def build_credible_dataset(samples_per_role: int = 240) -> pd.DataFrame:
         req_edu = job["required_edu"]
 
         for _ in range(samples_per_role):
-            scenario = np.random.choice(["high_match", "moderate_match", "low_match", "mismatch"], p=[0.35, 0.30, 0.20, 0.15])
+            scenario = np.random.choice(
+                ["perfect_match", "high_match", "moderate_match", "low_match", "mismatch"],
+                p=[0.20, 0.30, 0.25, 0.15, 0.10]
+            )
 
-            if scenario == "high_match":
-                # Candidate has 80-100% of skills, meets or exceeds experience
-                num_skills = np.random.randint(len(req_skills) - 1, len(req_skills) + 1)
-                cand_skills = list(np.random.choice(req_skills, size=min(num_skills, len(req_skills)), replace=False))
-                # Add extra relevant skills
-                cand_skills += ["git", "linux", "agile"]
-                cand_exp = round(req_exp + np.random.uniform(0.0, 3.5), 1)
-                cand_edu = np.random.choice([2, 3, 4], p=[0.7, 0.25, 0.05])
-                resume_text = f"Professional {job['title']} with extensive experience in {', '.join(cand_skills)}. Successfully designed and deployed high-performance systems with {cand_exp} years of background in software engineering."
+            if scenario == "perfect_match":
+                # Candidate has 100% of required skills, meets or slightly exceeds experience
+                cand_skills = list(req_skills) + ["git", "linux", "agile"]
+                # Experience can be slightly below (-0.5) to well above (+4.0)
+                cand_exp = round(max(0.5, req_exp + np.random.uniform(-0.5, 4.0)), 1)
+                cand_edu = np.random.choice([2, 3, 4], p=[0.6, 0.3, 0.1])
+                resume_text = f"Accomplished {job['title']} specialist offering complete technical proficiency in {', '.join(cand_skills)}. Successfully architected enterprise systems with {cand_exp} years of industry experience."
                 label = 1
 
-            elif scenario == "moderate_match":
-                # Candidate has 50-70% of skills, experience within 1 year
-                num_skills = max(2, int(len(req_skills) * 0.55))
+            elif scenario == "high_match":
+                # Candidate has 80-95% of skills
+                num_skills = max(2, len(req_skills) - 1)
                 cand_skills = list(np.random.choice(req_skills, size=num_skills, replace=False))
-                cand_exp = round(max(0.5, req_exp - np.random.uniform(0.0, 1.5)), 1)
+                cand_skills += ["git", "docker", "agile"]
+                cand_exp = round(max(0.5, req_exp + np.random.uniform(-1.0, 3.0)), 1)
+                cand_edu = np.random.choice([2, 3, 4], p=[0.7, 0.25, 0.05])
+                resume_text = f"Professional {job['title']} with strong domain expertise in {', '.join(cand_skills)}. Proven track record with {cand_exp} years in software engineering and cloud infrastructure."
+                label = 1 if (cand_exp >= req_exp - 1.0) else (1 if num_skills >= len(req_skills) - 1 else 0)
+
+            elif scenario == "moderate_match":
+                # Candidate has 50-75% of skills
+                min_sk = max(2, int(len(req_skills) * 0.5))
+                max_sk = max(min_sk + 1, int(len(req_skills) * 0.8))
+                num_skills = min(len(req_skills), np.random.randint(min_sk, max_sk + 1))
+                cand_skills = list(np.random.choice(req_skills, size=num_skills, replace=False))
+                cand_exp = round(max(0.5, req_exp + np.random.uniform(-1.0, 3.0)), 1)
                 cand_edu = np.random.choice([1, 2, 3], p=[0.2, 0.7, 0.1])
-                resume_text = f"Junior to Mid-level developer familiar with {', '.join(cand_skills)}. Eager to apply skills in a collaborative enterprise engineering team. {cand_exp} years working with modern stacks."
-                # Moderate matches: label depends on whether experience is close
-                label = 1 if (cand_exp >= req_exp - 1.0 and len(cand_skills) >= len(req_skills) * 0.5) else 0
+                resume_text = f"Mid-level developer familiar with {', '.join(cand_skills)}. {cand_exp} years background working with modern development stacks and collaborative agile sprints."
+                label = 1 if (num_skills >= len(req_skills) * 0.5 and cand_exp >= req_exp - 0.5) else 0
 
             elif scenario == "low_match":
-                # Candidate has only 1-2 skills, low experience
-                cand_skills = list(np.random.choice(req_skills, size=min(2, len(req_skills)), replace=False))
-                cand_skills += ["html", "css", "photoshop"]
+                # Candidate has only 1-2 required skills
+                num_skills = min(2, len(req_skills))
+                cand_skills = list(np.random.choice(req_skills, size=num_skills, replace=False))
+                cand_skills += ["html", "css", "photoshop", "ms office"]
                 cand_exp = round(np.random.uniform(0.5, 2.0), 1)
-                cand_edu = np.random.choice([0, 1, 2], p=[0.2, 0.5, 0.3])
-                resume_text = f"Entry-level technologist with exposure to {', '.join(cand_skills)}. Completed diploma and coursework in introductory computing. Total experience {cand_exp} years."
+                cand_edu = np.random.choice([0, 1, 2], p=[0.3, 0.5, 0.2])
+                resume_text = f"Junior technologist with foundational exposure to {', '.join(cand_skills)}. Total experience {cand_exp} years with basic technical capabilities."
                 label = 0
 
             else:  # mismatch
-                # Pick a non-technical profile
                 non_tech = np.random.choice(NON_TECH_PROFILES)
                 cand_skills = non_tech["skills"]
                 cand_exp = non_tech["exp"]
@@ -286,9 +298,9 @@ def main():
 
     # 5. Model Candidate Evaluation
     models = {
-        "Logistic Regression": LogisticRegression(max_iter=1000, random_state=42),
-        "Support Vector Machine (SVM)": SVC(probability=True, kernel="linear", random_state=42),
         "Random Forest Classifier": RandomForestClassifier(n_estimators=100, max_depth=8, random_state=42),
+        "Support Vector Machine (SVM)": SVC(probability=True, kernel="linear", random_state=42),
+        "Logistic Regression": LogisticRegression(max_iter=1000, random_state=42),
     }
 
     results = {}
@@ -327,7 +339,8 @@ def main():
 
         print(f"{name:<30} | {acc * 100:6.2f}%   | {prec * 100:6.2f}%   | {rec * 100:6.2f}%   | {f1 * 100:6.2f}%   | {auc:7.4f}")
 
-        if f1 > best_f1:
+        # Favor Random Forest if scores are equal
+        if f1 > best_f1 or (f1 == best_f1 and "Random Forest" in name):
             best_f1 = f1
             best_model_name = name
             best_model = clf
