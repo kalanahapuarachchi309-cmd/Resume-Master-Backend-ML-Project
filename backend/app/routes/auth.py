@@ -48,6 +48,7 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         access_token=token,
         token_type="bearer",
         role=user.role,
+        user=user,
     )
 
 

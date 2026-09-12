@@ -1,7 +1,6 @@
-"""Authentication and User Pydantic Schemas (Kalana)."""
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, EmailStr, Field
+from typing import Optional, Any
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 from app.models.user import UserRole
 
 
@@ -12,25 +11,22 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=6, max_length=128, description="User password (min 6 characters)")
     role: UserRole = Field(default=UserRole.CANDIDATE, description="User access control role")
 
+    @model_validator(mode="before")
+    @classmethod
+    def handle_name_aliases(cls, data: Any) -> Any:
+        """Allow 'full_name' or 'name' interchangeably."""
+        if isinstance(data, dict):
+            if "name" not in data and "full_name" in data:
+                data["name"] = data["full_name"]
+            elif "full_name" not in data and "name" in data:
+                data["full_name"] = data["name"]
+        return data
+
 
 class UserLogin(BaseModel):
     """Schema for user credential validation."""
     email: EmailStr
     password: str
-
-
-class TokenResponse(BaseModel):
-    """Schema for JWT access token response."""
-    access_token: str
-    token_type: str = "bearer"
-    role: UserRole
-
-
-class TokenPayload(BaseModel):
-    """Decoded token payload schema."""
-    sub: Optional[str] = None
-    role: Optional[str] = None
-    exp: Optional[int] = None
 
 
 class UserProfile(BaseModel):
@@ -41,5 +37,19 @@ class UserProfile(BaseModel):
     role: UserRole
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenResponse(BaseModel):
+    """Schema for JWT access token response."""
+    access_token: str
+    token_type: str = "bearer"
+    role: UserRole
+    user: Optional[UserProfile] = None
+
+
+class TokenPayload(BaseModel):
+    """Decoded token payload schema."""
+    sub: Optional[str] = None
+    role: Optional[str] = None
+    exp: Optional[int] = None
