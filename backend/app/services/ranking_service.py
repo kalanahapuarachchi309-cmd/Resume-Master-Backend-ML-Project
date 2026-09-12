@@ -18,7 +18,8 @@ class RankingService:
     def evaluate_candidates(
         db: Session,
         job_id: int,
-        resume_ids: Optional[List[int]] = None
+        resume_ids: Optional[List[int]] = None,
+        top_n: Optional[int] = None,
     ) -> JobMatchingResponse:
         """Evaluates candidate resumes against job vacancy specifications.
 
@@ -128,16 +129,20 @@ class RankingService:
 
         db.commit()
 
+        total_evaluated = len(rankings)
+        if top_n is not None and top_n > 0:
+            rankings = rankings[:top_n]
+
         return JobMatchingResponse(
             job_id=job.id,
             job_title=job.title,
-            total_candidates_evaluated=len(rankings),
+            total_candidates_evaluated=total_evaluated,
             evaluated_at=datetime.utcnow(),
             rankings=rankings,
         )
 
     @staticmethod
-    def get_job_rankings(db: Session, job_id: int) -> JobMatchingResponse:
+    def get_job_rankings(db: Session, job_id: int, top_n: Optional[int] = None) -> JobMatchingResponse:
         """Fetch previously computed rankings for a job. Automatically evaluates if not yet ranked."""
         job = db.query(Job).filter(Job.id == job_id).first()
         if not job:
@@ -155,7 +160,7 @@ class RankingService:
         if len(records) == 0:
             resume_count = db.query(Resume).count()
             if resume_count > 0:
-                return RankingService.evaluate_candidates(db=db, job_id=job_id)
+                return RankingService.evaluate_candidates(db=db, job_id=job_id, top_n=top_n)
 
         from app.services.feature_engineering import normalize_degree
         req_edu_name, req_edu_tier = normalize_degree(job.education_level)
@@ -203,10 +208,14 @@ class RankingService:
                 file_url=file_url,
             ))
 
+        total_evaluated = len(rankings)
+        if top_n is not None and top_n > 0:
+            rankings = rankings[:top_n]
+
         return JobMatchingResponse(
             job_id=job.id,
             job_title=job.title,
-            total_candidates_evaluated=len(rankings),
+            total_candidates_evaluated=total_evaluated,
             evaluated_at=datetime.utcnow(),
             rankings=rankings,
         )

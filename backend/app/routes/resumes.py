@@ -3,7 +3,7 @@ import os
 import uuid
 import re
 from typing import List, Optional
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, status
 from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 
@@ -224,7 +224,7 @@ async def upload_batch_resumes(
 @router.get("/", response_model=List[ResumeDetailResponse])
 def list_resumes(
     skip: int = 0,
-    limit: int = 50,
+    limit: int = Query(300, ge=1, le=1000, description="Number of resumes to return"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

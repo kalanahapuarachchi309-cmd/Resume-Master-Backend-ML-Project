@@ -1,5 +1,6 @@
 """ML Candidate Matching & Ranking Route Handlers (Sampath & Team)."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.schemas.matching import MatchEvaluationRequest, JobMatchingResponse
@@ -13,6 +14,7 @@ router = APIRouter(prefix="/matching", tags=["Matching & Ranking"])
 def evaluate_candidates_for_job(
     job_id: int,
     request: MatchEvaluationRequest,
+    top_n: Optional[int] = Query(None, ge=1, le=500, description="Optionally limit top N candidates"),
     current_user=Depends(require_role(["RECRUITER", "ADMIN"])),
     db: Session = Depends(get_db),
 ):
@@ -21,7 +23,8 @@ def evaluate_candidates_for_job(
         return RankingService.evaluate_candidates(
             db=db,
             job_id=job_id,
-            resume_ids=request.resume_ids
+            resume_ids=request.resume_ids,
+            top_n=top_n
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -32,12 +35,13 @@ def evaluate_candidates_for_job(
 @router.get("/job/{job_id}/rankings", response_model=JobMatchingResponse)
 def get_job_rankings(
     job_id: int,
+    top_n: Optional[int] = Query(None, ge=1, le=500, description="Optionally limit top N candidates"),
     current_user=Depends(require_role(["RECRUITER", "ADMIN"])),
     db: Session = Depends(get_db),
 ):
     """Retrieve saved ranking leaderboard and explainable match breakdown for a job."""
     try:
-        return RankingService.get_job_rankings(db=db, job_id=job_id)
+        return RankingService.get_job_rankings(db=db, job_id=job_id, top_n=top_n)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
