@@ -1,31 +1,44 @@
-"""ML Candidate Matching & Ranking Route Handlers (Member 2 Focus)."""
-from fastapi import APIRouter, Depends, status
+"""ML Candidate Matching & Ranking Route Handlers (Sampath & Team)."""
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.schemas.matching import MatchEvaluationRequest, JobMatchingResponse
+from app.services.ranking_service import RankingService
 from app.core.security import require_role
 
 router = APIRouter(prefix="/matching", tags=["Matching & Ranking"])
 
 
 @router.post("/job/{job_id}/evaluate", response_model=JobMatchingResponse, status_code=status.HTTP_200_OK)
-async def evaluate_candidates_for_job(
+def evaluate_candidates_for_job(
     job_id: int,
     request: MatchEvaluationRequest,
-    current_user: dict = Depends(require_role(["RECRUITER", "ADMIN"])),
+    current_user=Depends(require_role(["RECRUITER", "ADMIN"])),
     db: Session = Depends(get_db),
 ):
-    """Trigger ML feature extraction, scoring, and ranking for candidate resumes against job specifications."""
-    # Stub: Member 2 to invoke feature engineering, predictor, and ranking service
-    pass
+    """Trigger genuine ML feature extraction, model scoring, and ranking for candidates against a job."""
+    try:
+        return RankingService.evaluate_candidates(
+            db=db,
+            job_id=job_id,
+            resume_ids=request.resume_ids
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"ML Evaluation failed: {str(e)}")
 
 
 @router.get("/job/{job_id}/rankings", response_model=JobMatchingResponse)
-async def get_job_rankings(
+def get_job_rankings(
     job_id: int,
-    current_user: dict = Depends(require_role(["RECRUITER", "ADMIN"])),
+    current_user=Depends(require_role(["RECRUITER", "ADMIN"])),
     db: Session = Depends(get_db),
 ):
     """Retrieve saved ranking leaderboard and explainable match breakdown for a job."""
-    # Stub: Member 2 / Member 1 to retrieve persisted match results
-    pass
+    try:
+        return RankingService.get_job_rankings(db=db, job_id=job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch rankings: {str(e)}")
