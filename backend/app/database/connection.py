@@ -38,7 +38,12 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db():
-    """Initializes all database tables on application startup."""
+    """Initializes all database tables and seeds default users on application startup."""
     import app.models  # Ensure all ORM models are registered with Base metadata
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized successfully.")
+    try:
+        from app.database.seed import seed_default_users
+        seed_default_users()
+    except Exception as e:
+        logger.warning(f"Could not auto-seed default users: {e}")
