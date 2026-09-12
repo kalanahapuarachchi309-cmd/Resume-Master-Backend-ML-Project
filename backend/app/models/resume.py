@@ -18,6 +18,7 @@ class Resume(Base):
     parsed_skills = Column(JSON, nullable=False, default=list)  # List of extracted skills
     experience_years = Column(Float, default=0.0, nullable=False)
     education_level = Column(String(100), nullable=True)
+    file_url = Column(String(512), nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships

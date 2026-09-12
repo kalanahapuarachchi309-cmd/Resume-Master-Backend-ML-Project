@@ -9,6 +9,7 @@ class ResumeUploadResponse(BaseModel):
     id: int
     filename: str
     candidate_name: Optional[str] = None
+    file_url: Optional[str] = None
     parsed_skills: List[str] = []
     experience_years: float = 0.0
     education_level: Optional[str] = None
@@ -25,6 +26,7 @@ class ResumeDetailResponse(BaseModel):
     candidate_id: Optional[int] = None
     candidate_name: Optional[str] = None
     filename: str
+    file_url: Optional[str] = None
     raw_text: Optional[str] = None
     parsed_skills: List[str] = []
     experience_years: float = 0.0

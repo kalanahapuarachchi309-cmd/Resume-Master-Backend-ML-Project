@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 10
     UPLOAD_DIR: str = "./uploads"
 
+    # Cloudinary Cloud Storage Settings (Mahen & Team)
+    CLOUDINARY_CLOUD_NAME: str = os.getenv("CLOUDINARY_CLOUD_NAME", "djsdwv2na")
+    CLOUDINARY_API_KEY: str = os.getenv("CLOUDINARY_API_KEY", "216632618736747")
+    CLOUDINARY_API_SECRET: str = os.getenv("CLOUDINARY_API_SECRET", "Bnfp7Px9C57hfxcXrdo2xYx26LY")
+    CLOUDINARY_FOLDER: str = os.getenv("CLOUDINARY_FOLDER", "resume_master")
+
     @property
     def cors_origins(self) -> List[str]:
         """Convert comma-separated origins string to a clean list."""

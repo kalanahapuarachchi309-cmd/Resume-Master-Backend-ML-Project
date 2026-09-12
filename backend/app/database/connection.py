@@ -53,6 +53,13 @@ def init_db():
                 with engine.begin() as conn:
                     conn.execute(text("ALTER TABLE jobs ADD COLUMN education_level VARCHAR(100) DEFAULT 'Bachelor''s Degree'"))
                 logger.info("Auto-migrated 'jobs' table: added 'education_level' column.")
+
+        if "resumes" in inspector.get_table_names():
+            resumes_cols = [c["name"] for c in inspector.get_columns("resumes")]
+            if "file_url" not in resumes_cols:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE resumes ADD COLUMN file_url VARCHAR(512)"))
+                logger.info("Auto-migrated 'resumes' table: added 'file_url' column.")
     except Exception as e:
         logger.warning(f"Schema auto-migration notice: {e}")
 

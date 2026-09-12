@@ -25,6 +25,7 @@ class CandidateMatchDetail(BaseModel):
     match_summary: Optional[str] = None
     model_used: Optional[str] = "RandomForestClassifier (Supervised ML)"
     feature_contributions: Optional[dict] = None
+    file_url: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod

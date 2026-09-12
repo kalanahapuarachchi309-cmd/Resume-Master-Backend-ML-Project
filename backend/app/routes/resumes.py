@@ -2,8 +2,9 @@
 import os
 import uuid
 import re
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -14,13 +15,14 @@ from app.schemas.resume import ResumeUploadResponse, ResumeDetailResponse
 from app.services.parsers.pdf_parser import PDFParser
 from app.services.parsers.docx_parser import DocxParser
 from app.services.nlp.skill_extractor import SkillExtractor
+from app.services.cloudinary_service import CloudinaryService
 from app.core.security import get_current_user
 
 router = APIRouter(prefix="/resumes", tags=["Resumes"])
 
 
 def _save_and_parse_file(file_bytes: bytes, original_filename: str) -> dict:
-    """Helper to validate, save to unique path, and parse document."""
+    """Helper to validate, save to unique path, upload to Cloudinary, and parse document."""
     # Enforce file size limit
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     if len(file_bytes) > max_bytes:
@@ -42,9 +44,12 @@ def _save_and_parse_file(file_bytes: bytes, original_filename: str) -> dict:
     unique_filename = f"{uuid.uuid4().hex[:10]}_{clean_name}"
     disk_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
 
-    # Write actual file bytes to disk
+    # Write actual file bytes to disk as local backup
     with open(disk_path, "wb") as f:
         f.write(file_bytes)
+
+    # Upload to Cloudinary CDN (Mahen & Team)
+    cloudinary_url = CloudinaryService.upload_resume(file_bytes, original_filename)
 
     # Extract text according to format
     if ext == ".pdf":
@@ -85,10 +90,13 @@ def _save_and_parse_file(file_bytes: bytes, original_filename: str) -> dict:
         clean = re.sub(r'(?i)(_resume|_cv|resume|cv)', '', base).strip(' _-')
         candidate_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', clean).replace('_', ' ').replace('-', ' ').title()
 
+    effective_file_url = cloudinary_url or f"/api/resumes/file/{unique_filename}"
+
     return {
         "filename": original_filename,
         "candidate_name": candidate_name,
         "file_path": disk_path,
+        "file_url": effective_file_url,
         "raw_text": raw_text,
         "parsed_skills": parsed_skills,
         "experience_years": experience_years,
@@ -102,7 +110,7 @@ async def upload_resume(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload and parse an individual candidate resume (.pdf or .docx)."""
+    """Handle candidate single resume upload, Cloudinary CDN sync, and NLP extraction."""
     content = await file.read()
     parsed_data = _save_and_parse_file(content, file.filename)
 
@@ -114,6 +122,7 @@ async def upload_resume(
         candidate_name=name,
         filename=parsed_data["filename"],
         file_path=parsed_data["file_path"],
+        file_url=parsed_data.get("file_url"),
         raw_text=parsed_data["raw_text"],
         parsed_skills=parsed_data["parsed_skills"],
         experience_years=parsed_data["experience_years"],
@@ -127,11 +136,12 @@ async def upload_resume(
         id=resume.id,
         filename=resume.filename,
         candidate_name=resume.candidate_name,
+        file_url=resume.file_url or resume.file_path,
         parsed_skills=resume.parsed_skills,
         experience_years=resume.experience_years,
         education_level=resume.education_level,
         uploaded_at=resume.uploaded_at,
-        message="Resume successfully processed and indexed.",
+        message="Resume successfully processed, backed up to Cloudinary, and indexed.",
     )
 
 
@@ -142,7 +152,7 @@ async def upload_batch_resumes(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload and parse a batch/bulk of candidate resumes simultaneously."""
+    """Upload and parse a batch/bulk of candidate resumes simultaneously (supports up to 300 CVs in chunked batches)."""
     if not files or len(files) == 0:
         raise HTTPException(status_code=400, detail="No files were provided for upload.")
 
@@ -152,7 +162,6 @@ async def upload_batch_resumes(
             content = await upload.read()
             parsed_data = _save_and_parse_file(content, upload.filename)
 
-            # Generate clean candidate name
             candidate_display_name = parsed_data.get("candidate_name")
             if not candidate_display_name:
                 base_name = upload.filename.rsplit(".", 1)[0]
@@ -166,6 +175,7 @@ async def upload_batch_resumes(
                 candidate_name=candidate_display_name,
                 filename=parsed_data["filename"],
                 file_path=parsed_data["file_path"],
+                file_url=parsed_data.get("file_url"),
                 raw_text=parsed_data["raw_text"],
                 parsed_skills=parsed_data["parsed_skills"],
                 experience_years=parsed_data["experience_years"],
@@ -179,14 +189,15 @@ async def upload_batch_resumes(
                 id=resume.id,
                 filename=resume.filename,
                 candidate_name=resume.candidate_name,
+                file_url=resume.file_url or resume.file_path,
                 parsed_skills=resume.parsed_skills,
                 experience_years=resume.experience_years,
                 education_level=resume.education_level,
                 uploaded_at=resume.uploaded_at,
-                message="Successfully parsed and indexed.",
+                message="Successfully parsed, uploaded to Cloudinary, and indexed.",
             ))
         except Exception as e:
-            # Continue with other files if one file fails
+            # Continue with remaining files if one encounters an error
             continue
 
     return results
@@ -225,3 +236,28 @@ def get_resume(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to candidate record")
 
     return resume
+
+
+@router.get("/{resume_id}/file")
+def get_resume_file(
+    resume_id: int,
+    db: Session = Depends(get_db)
+):
+    """Serve or redirect to candidate resume document (Cloudinary CDN or local file stream)."""
+    resume = db.query(Resume).filter(Resume.id == resume_id).first()
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume record not found")
+
+    # 1. If Cloudinary URL exists, redirect directly to Cloudinary CDN
+    if resume.file_url and (resume.file_url.startswith("http://") or resume.file_url.startswith("https://")):
+        return RedirectResponse(url=resume.file_url)
+
+    if resume.file_path and (resume.file_path.startswith("http://") or resume.file_path.startswith("https://")):
+        return RedirectResponse(url=resume.file_path)
+
+    # 2. If stored on local disk, stream as file
+    if resume.file_path and os.path.exists(resume.file_path):
+        media_type = "application/pdf" if resume.filename.lower().endswith(".pdf") else "application/octet-stream"
+        return FileResponse(resume.file_path, media_type=media_type, filename=resume.filename)
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume document file not found")

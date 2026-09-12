@@ -66,6 +66,8 @@ class RankingService:
             # 2. Get genuine ML predicted match probability from trained model
             ml_score = predictor_service.predict_match_probability(features)
 
+            file_url = getattr(resume, "file_url", None) or (resume.file_path if resume.file_path and resume.file_path.startswith("http") else f"/api/resumes/{resume.id}/file")
+
             evaluated_candidates.append({
                 "resume_id": resume.id,
                 "candidate_name": resume.candidate_name or f"Candidate #{resume.id}",
@@ -74,6 +76,7 @@ class RankingService:
                 "missing_skills": explain["missing_skills"],
                 "experience_years": explain["experience_years"],
                 "experience_fit": explain["experience_fit"],
+                "file_url": file_url,
             })
 
         # 3. Sort candidates strictly descending by ML match score
@@ -95,6 +98,7 @@ class RankingService:
                 missing_skills=item["missing_skills"],
                 experience_years=item["experience_years"],
                 experience_fit=item["experience_fit"],
+                file_url=item["file_url"],
             )
             rankings.append(detail)
 
@@ -145,6 +149,8 @@ class RankingService:
             else:
                 exp_fit = f"Under Requirement (-{round(req_exp - cand_exp, 1)} yrs)"
 
+            file_url = getattr(resume, "file_url", None) or (resume.file_path if resume.file_path and resume.file_path.startswith("http") else f"/api/resumes/{resume.id}/file")
+
             rankings.append(CandidateMatchDetail(
                 resume_id=resume.id,
                 candidate_name=resume.candidate_name or f"Candidate #{resume.id}",
@@ -154,6 +160,7 @@ class RankingService:
                 missing_skills=match.missing_skills or [],
                 experience_years=cand_exp,
                 experience_fit=exp_fit,
+                file_url=file_url,
             ))
 
         return JobMatchingResponse(
