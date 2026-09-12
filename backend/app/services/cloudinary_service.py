@@ -107,6 +107,7 @@ class CloudinaryService:
             logger.info(f"Uploaded resume '{filename}' to Cloudinary: {secure_url}")
             return secure_url
         except Exception as e:
+            print(f"[Cloudinary Upload Error] Failed to upload '{filename}': {e}")
             logger.error(f"Cloudinary upload failed for '{filename}': {e}")
             return None
 

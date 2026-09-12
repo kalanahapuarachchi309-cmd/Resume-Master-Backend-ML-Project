@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 # Determine database engine with automatic SQLite fallback
 database_url = settings.DATABASE_URL
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
 
 if database_url.startswith("sqlite"):
     engine = create_engine(
