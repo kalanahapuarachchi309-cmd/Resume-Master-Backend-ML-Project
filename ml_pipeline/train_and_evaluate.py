@@ -10,10 +10,18 @@ Exports:
 """
 
 import os
+import sys
 import pickle
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Any, Tuple
+
+# Ensure UTF-8 output on Windows console
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_extraction.text import TfidfVectorizer
