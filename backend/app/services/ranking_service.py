@@ -9,6 +9,7 @@ from app.models.match_result import MatchResult
 from app.schemas.matching import CandidateMatchDetail, JobMatchingResponse
 from app.services.feature_engineering import FeatureEngineeringPipeline
 from app.ml.predictor import predictor_service
+from app.services.cloudinary_service import CloudinaryService
 
 
 class RankingService:
@@ -32,6 +33,12 @@ class RankingService:
         6. Prevent duplicate records by clearing prior rankings for this job
         7. Persist rankings to MatchResult table
         """
+        # Ensure all candidate resumes are backed up to Cloudinary CDN
+        try:
+            CloudinaryService.sync_missing_to_cloudinary(db)
+        except Exception:
+            pass
+
         job = db.query(Job).filter(Job.id == job_id).first()
         if not job:
             raise ValueError(f"Job with ID {job_id} not found")
@@ -144,6 +151,11 @@ class RankingService:
     @staticmethod
     def get_job_rankings(db: Session, job_id: int, top_n: Optional[int] = None) -> JobMatchingResponse:
         """Fetch previously computed rankings for a job. Automatically evaluates if not yet ranked."""
+        try:
+            CloudinaryService.sync_missing_to_cloudinary(db)
+        except Exception:
+            pass
+
         job = db.query(Job).filter(Job.id == job_id).first()
         if not job:
             raise ValueError(f"Job with ID {job_id} not found")

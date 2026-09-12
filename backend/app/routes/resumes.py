@@ -256,12 +256,22 @@ def get_resume(
     return resume
 
 
+@router.post("/sync-cloudinary")
+def sync_cloudinary_resumes(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Sync, verify, and import all resumes stored on Cloudinary CDN into database."""
+    result = CloudinaryService.sync_from_cloudinary(db=db, user_id=current_user.id)
+    return result
+
+
 @router.get("/{resume_id}/file")
 def get_resume_file(
     resume_id: int,
     db: Session = Depends(get_db)
 ):
-    """Serve or redirect to candidate resume document (Cloudinary CDN or local file stream)."""
+    """Serve or redirect to candidate resume document (always redirects to Cloudinary CDN)."""
     resume = db.query(Resume).filter(Resume.id == resume_id).first()
     if not resume:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume record not found")
@@ -273,8 +283,19 @@ def get_resume_file(
     if resume.file_path and (resume.file_path.startswith("http://") or resume.file_path.startswith("https://")):
         return RedirectResponse(url=resume.file_path)
 
-    # 2. If stored on local disk, stream as file
+    # 2. If stored on local disk, upload to Cloudinary on-the-fly and redirect
     if resume.file_path and os.path.exists(resume.file_path):
+        try:
+            with open(resume.file_path, "rb") as f:
+                content = f.read()
+            c_url = CloudinaryService.upload_resume(content, resume.filename)
+            if c_url:
+                resume.file_url = c_url
+                db.commit()
+                return RedirectResponse(url=c_url)
+        except Exception:
+            pass
+
         media_type = "application/pdf" if resume.filename.lower().endswith(".pdf") else "application/octet-stream"
         return FileResponse(resume.file_path, media_type=media_type, filename=resume.filename)
 
