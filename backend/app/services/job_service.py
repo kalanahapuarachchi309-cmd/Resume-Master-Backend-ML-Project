@@ -57,7 +57,9 @@ class JobService:
 
         update_data = job_update.model_dump(exclude_unset=True)
         if "min_experience_years" in update_data and "experience_required" not in update_data:
-            update_data["experience_required"] = update_data["min_experience_years"]
+            update_data["experience_required"] = float(update_data["min_experience_years"])
+        elif "experience_required" in update_data and update_data["experience_required"] is not None:
+            update_data["experience_required"] = float(update_data["experience_required"])
 
         for key, value in update_data.items():
             if hasattr(job, key):

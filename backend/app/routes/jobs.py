@@ -54,7 +54,7 @@ def update_job(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
     user_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    if job.recruiter_id != current_user.id and user_role != "ADMIN":
+    if job.recruiter_id != current_user.id and user_role not in ["ADMIN", "RECRUITER"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to modify this job posting"
@@ -70,13 +70,13 @@ def delete_job(
     current_user: User = Depends(require_role(["RECRUITER", "ADMIN"])),
     db: Session = Depends(get_db),
 ):
-    """Remove a job listing (Job creator or Admin)."""
+    """Remove a job listing (Job creator, Recruiter, or Admin)."""
     job = JobService.get_job(db=db, job_id=job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
     user_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    if job.recruiter_id != current_user.id and user_role != "ADMIN":
+    if job.recruiter_id != current_user.id and user_role not in ["ADMIN", "RECRUITER"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this job posting"
